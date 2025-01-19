@@ -10,6 +10,7 @@ use Illuminate\Foundation\Http\FormRequest;
 class StoreMeterReadingRequest extends FormRequest
 {
     protected ?int $originalReadingValue;
+    protected ?Carbon $previousReadingDate;
 
     public function authorize()
     {
@@ -28,6 +29,10 @@ class StoreMeterReadingRequest extends FormRequest
                     if (Carbon::parse($value)->lte(Carbon::parse($installationDate))) {
                         $fail('The reading date must be after the installation date.');
                     }
+                    // don't allow submitting a reading date thats before the previous reading date
+                    if($this->previousReading && Carbon::parse($value)->lte($this->previousReading->reading_date)){
+                        $fail('The reading date must be after the previous reading date.');
+                    }
                 },
             ],
             'reading_value' => ['nullable', 'integer', 'min:1', new WithinEstimatedRange($this->originalReadingValue)],
@@ -38,8 +43,18 @@ class StoreMeterReadingRequest extends FormRequest
     {
         $this->originalReadingValue = $this->reading_value;
 
+        $this->previousReading = request()->route('meter')->readings()->latest('reading_date')->first();
+
+        $readingDate = Carbon::createFromFormat('Y-m-d', $this->reading_date);
+
+        // if there is a previous reading and the future reading date submitted is before the previous reading date, then return
+        if ($this->previousReading && $this->previousReading->reading_date->gt($readingDate)) {
+            return;
+        }
+
         // check if reading_value is null and compute it if necessary
         if (is_null($this->reading_value) && $this->filled('reading_date')) {
+
             $readingDate = Carbon::createFromFormat('Y-m-d', $this->reading_date);
 
             if($readingDate->isFuture()){

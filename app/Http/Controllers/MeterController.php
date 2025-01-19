@@ -49,7 +49,10 @@ class MeterController extends Controller
      */
     public function show(Meter $meter): Application|View|Factory
     {
-        $meter->load('readings');
+        // could also put the orderBy on the readings relationship in the Meter model if we always want to order by reading_date
+        $meter->load(['readings' => function ($query) {
+            $query->orderBy('reading_date');
+        }]);
 
         return view('meters.show', compact('meter'));
     }
